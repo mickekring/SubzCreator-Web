@@ -1,0 +1,52 @@
+{
+  "name": "tool--subz-creator",
+  "version": "1.0.0",
+  "description": "SubzCreator - A Happy Scribe clone for transcription and subtitling",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mickekring/TOOL--Subz-Creator.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mickekring/TOOL--Subz-Creator/issues"
+  },
+  "homepage": "https://github.com/mickekring/TOOL--Subz-Creator#readme",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.958.0",
+    "@aws-sdk/lib-storage": "^3.958.0",
+    "@aws-sdk/s3-request-presigner": "^3.958.0",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/node": "^25.0.3",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.23",
+    "axios": "^1.13.2",
+    "bcrypt": "^6.0.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "next": "^16.1.1",
+    "next-auth": "^5.0.0-beta.30",
+    "nocodb-sdk": "^0.265.1",
+    "openai": "^6.15.0",
+    "postcss": "^8.5.6",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+    "zustand": "^5.0.9"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0"
+  }
+}
