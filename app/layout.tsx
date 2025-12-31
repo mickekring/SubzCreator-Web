@@ -5,6 +5,10 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'SubzCreator - Transcription & Subtitling Platform',
   description: 'Professional transcription and subtitling platform for audio and video content',
+  icons: {
+    icon: '/icon.svg',
+    apple: '/apple-icon.svg',
+  },
 }
 
 export default function RootLayout({
