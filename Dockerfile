@@ -3,8 +3,19 @@
 
 FROM node:22-alpine AS base
 
-# Install FFmpeg and dependencies
-RUN apk add --no-cache ffmpeg
+# Install FFmpeg with subtitle support and fonts
+# - ffmpeg: video processing
+# - libass: ASS subtitle rendering (required for subtitles filter)
+# - fontconfig: font configuration
+# - ttf-freefont: fonts for subtitle rendering
+# - harfbuzz: text shaping for proper font rendering
+RUN apk add --no-cache \
+    ffmpeg \
+    libass \
+    fontconfig \
+    ttf-freefont \
+    harfbuzz \
+    && fc-cache -f
 
 # Install dependencies only when needed
 FROM base AS deps
