@@ -8,6 +8,32 @@ import type { TranscriptionSegment } from '@/lib/types';
 export type SubtitleFormat = 'srt' | 'vtt' | 'ass' | 'txt' | 'json';
 
 /**
+ * Normalize text for subtitle rendering
+ * Replaces Unicode characters that may not render in limited font sets
+ * with their ASCII equivalents
+ */
+function normalizeTextForSubtitles(text: string): string {
+  return text
+    // Dashes and hyphens
+    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-') // Various dashes to hyphen-minus
+    // Quotes
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'") // Single quotes
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"') // Double quotes
+    // Spaces
+    .replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/g, ' ') // Various spaces to regular space
+    // Ellipsis
+    .replace(/\u2026/g, '...') // Ellipsis to three dots
+    // Bullets
+    .replace(/[\u2022\u2023\u2043]/g, '*') // Bullets to asterisk
+    // Arrows (common in translations)
+    .replace(/\u2192/g, '->') // Right arrow
+    .replace(/\u2190/g, '<-') // Left arrow
+    // Other common replacements
+    .replace(/\u00D7/g, 'x') // Multiplication sign to x
+    .replace(/\u00F7/g, '/'); // Division sign to slash
+}
+
+/**
  * Format time for SRT (HH:MM:SS,mmm)
  */
 function formatSRTTime(seconds: number): string {
@@ -198,7 +224,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     .flatMap((segment) => {
       const start = formatASSTime(segment.StartTime);
       const end = formatASSTime(segment.EndTime);
-      const text = segment.Text.trim();
+      // Normalize text to replace Unicode characters that may not render in limited font sets
+      const text = normalizeTextForSubtitles(segment.Text.trim());
 
       // Check if this is a multi-line subtitle
       if (text.includes('\n')) {
