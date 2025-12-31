@@ -790,7 +790,7 @@ export default function TranscriptionEditorPage() {
   };
 
   // Export video with burnt-in subtitles
-  const handleExportBurnedVideo = async (options: { style: SubtitleStyle; resolution: '720p' | '1080p' | '4k' }) => {
+  const handleExportBurnedVideo = async (options: { style: SubtitleStyle; resolution: '720p' | '1080p' | '4k' }, language?: string) => {
     if (!id) return;
 
     const { style, resolution } = options;
@@ -805,6 +805,7 @@ export default function TranscriptionEditorPage() {
         body: JSON.stringify({
           transcriptionId: parseInt(id),
           resolution,
+          language: language || undefined,
           style: {
             fontSize: style.fontSize,
             fontColor: style.fontColor,

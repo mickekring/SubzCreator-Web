@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient, sanitizeNumericId } from '@/lib/db/nocodb';
+import { getNocoDBClient, sanitizeNumericId, sanitizeNocoDBValue } from '@/lib/db/nocodb';
 import { createS3Storage, S3Storage } from '@/lib/storage/s3';
 import { generateASS } from '@/lib/export/subtitles';
 import { burnSubtitles, saveToTempFile, cleanupTempFile, readFileToBuffer } from '@/lib/media/ffmpeg';
@@ -13,7 +13,7 @@ import { checkRateLimit, getClientIP } from '@/lib/auth/rate-limit';
 import { writeFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import type { APIResponse, Transcription, TranscriptionSegment } from '@/lib/types';
+import type { APIResponse, Transcription, TranscriptionSegment, TranslatedSegment } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 600; // 10 minutes for long videos
@@ -36,6 +36,7 @@ interface SubtitleStyle {
  * Body:
  *   - transcriptionId: number
  *   - resolution?: '720p' | '1080p' | '4k' (default: '1080p')
+ *   - language?: string (target language code for translated subtitles)
  *   - style?: SubtitleStyle (font size, colors, background settings)
  */
 export async function POST(request: NextRequest) {
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { transcriptionId, resolution = '1080p', style = {} as SubtitleStyle } = body;
+    const { transcriptionId, resolution = '1080p', language, style = {} as SubtitleStyle } = body;
 
     if (!transcriptionId) {
       return NextResponse.json<APIResponse>(
@@ -142,30 +143,75 @@ export async function POST(request: NextRequest) {
 
     // Sanitize transcriptionId for NocoDB query
     const safeTranscriptionId = sanitizeNumericId(transcriptionId);
+    const safeLanguage = language ? sanitizeNocoDBValue(language) : null;
 
-    // Get segments
-    const segments = await db.dbTableRow.list(
-      'noco',
-      'SubzCreator',
-      'TranscriptionSegments',
-      {
-        where: `(TranscriptionId,eq,${safeTranscriptionId})`,
-        sort: 'StartTime',
-        limit: 10000,
-      }
-    );
+    // Get segments - either original or translated
+    let segmentsForBurn: TranscriptionSegment[];
 
-    if (!segments.list || segments.list.length === 0) {
-      return NextResponse.json<APIResponse>(
+    if (safeLanguage) {
+      // Fetch translated segments
+      const translatedResult = await db.dbTableRow.list(
+        'noco',
+        'SubzCreator',
+        'TranslatedSegments',
         {
-          success: false,
-          error: 'No segments found for this transcription',
-        },
-        { status: 404 }
+          where: `(TranscriptionId,eq,${safeTranscriptionId})~and(TargetLanguage,eq,${safeLanguage})`,
+          sort: 'SegmentIndex',
+          limit: 10000,
+        }
       );
+
+      if (!translatedResult.list || translatedResult.list.length === 0) {
+        return NextResponse.json<APIResponse>(
+          {
+            success: false,
+            error: `No translated segments found for language: ${language}`,
+          },
+          { status: 404 }
+        );
+      }
+
+      // Map translated segments to the format expected by generateASS
+      // Only Text, StartTime, EndTime are used by the ASS generator
+      segmentsForBurn = (translatedResult.list as TranslatedSegment[]).map((ts) => ({
+        Id: ts.OriginalSegmentId,
+        TranscriptionId: ts.TranscriptionId,
+        SegmentIndex: ts.SegmentIndex,
+        Text: ts.TranslatedText,
+        StartTime: ts.StartTime,
+        EndTime: ts.EndTime,
+        Confidence: 1,
+        CreatedAt: ts.CreatedAt,
+        UpdatedAt: ts.UpdatedAt,
+      }));
+    } else {
+      // Fetch original segments
+      const segments = await db.dbTableRow.list(
+        'noco',
+        'SubzCreator',
+        'TranscriptionSegments',
+        {
+          where: `(TranscriptionId,eq,${safeTranscriptionId})`,
+          sort: 'StartTime',
+          limit: 10000,
+        }
+      );
+
+      if (!segments.list || segments.list.length === 0) {
+        return NextResponse.json<APIResponse>(
+          {
+            success: false,
+            error: 'No segments found for this transcription',
+          },
+          { status: 404 }
+        );
+      }
+
+      segmentsForBurn = segments.list as TranscriptionSegment[];
     }
 
-    console.log(`Burning subtitles for transcription ${transcriptionId} with ${segments.list.length} segments`);
+    console.log(`Burning subtitles for transcription ${transcriptionId} with ${segmentsForBurn.length} segments${safeLanguage ? ` (${language})` : ''}`);
+
     console.log('Subtitle style received:', JSON.stringify(style, null, 2));
 
     // Prepare ASS options with detailed logging
@@ -181,7 +227,7 @@ export async function POST(request: NextRequest) {
     console.log('ASS options being used:', JSON.stringify(assOptions, null, 2));
 
     // Generate ASS subtitle content with custom styling
-    const assContent = generateASS(segments.list as TranscriptionSegment[], assOptions);
+    const assContent = generateASS(segmentsForBurn, assOptions);
 
     // Log first part of ASS content to verify styling
     console.log('ASS content header:', assContent.substring(0, 800));
@@ -225,11 +271,12 @@ export async function POST(request: NextRequest) {
     // Read output video
     const outputBuffer = await readFileToBuffer(outputVideoPath);
 
-    // Generate filename
+    // Generate filename (include language if translated)
     const baseFilename = (transcription.Title || 'video')
       .replace(/\.[^/.]+$/, '')
       .replace(/[^a-zA-Z0-9-_]/g, '_');
-    const filename = `${baseFilename}_subtitled_${resolution}.mp4`;
+    const langSuffix = language ? `_${language}` : '';
+    const filename = `${baseFilename}_subtitled${langSuffix}_${resolution}.mp4`;
 
     // Clean up temp files
     if (tempVideoPath) cleanupTempFile(tempVideoPath);
