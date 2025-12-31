@@ -126,19 +126,21 @@ export function FileUploader({
 
       setUploadedFiles((prev) => [...prev, ...newUploads]);
 
-      for (let i = 0; i < validFiles.length; i++) {
-        const file = validFiles[i];
-        const uploadIndex = startIndex + i;
-        try {
-          await uploadFile(file, uploadIndex);
-        } catch (error) {
-          console.error('Upload error:', error);
-          updateFileStatus(uploadIndex, {
-            status: 'error',
-            error: error instanceof Error ? error.message : 'Upload failed',
-          });
-        }
-      }
+      // Upload all files in parallel so each shows its own progress
+      await Promise.all(
+        validFiles.map(async (file, i) => {
+          const uploadIndex = startIndex + i;
+          try {
+            await uploadFile(file, uploadIndex);
+          } catch (error) {
+            console.error('Upload error:', error);
+            updateFileStatus(uploadIndex, {
+              status: 'error',
+              error: error instanceof Error ? error.message : 'Upload failed',
+            });
+          }
+        })
+      );
     },
     [maxFiles, maxSizeMB, acceptedTypes, uploadedFiles.length, onUploadStart]
   );
