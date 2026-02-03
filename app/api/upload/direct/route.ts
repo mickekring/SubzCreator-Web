@@ -57,9 +57,9 @@ export async function POST(request: NextRequest) {
       return errorResponse(`Unsupported file type: ${file.type}`, 400);
     }
 
-    // Validate file size (1GB max for direct upload)
+    // Validate file size (5GB max for direct upload)
     if (file.size > FILE_SIZE_LIMITS.MAX_DIRECT_UPLOAD_SIZE) {
-      return errorResponse('File too large. Maximum size is 1GB', 400);
+      return errorResponse('File too large. Maximum size is 5GB', 400);
     }
 
     console.log(`Uploading file: ${file.name} (${file.size} bytes)`);

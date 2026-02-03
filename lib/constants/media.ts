@@ -35,10 +35,10 @@ export const ALLOWED_MIME_TYPES = [
 
 // File size limits
 export const FILE_SIZE_LIMITS = {
-  /** Maximum file size in bytes (2GB) */
-  MAX_FILE_SIZE: 2 * 1024 * 1024 * 1024,
-  /** Maximum file size for direct upload (1GB) */
-  MAX_DIRECT_UPLOAD_SIZE: 1024 * 1024 * 1024,
+  /** Maximum file size in bytes (5GB) */
+  MAX_FILE_SIZE: 5 * 1024 * 1024 * 1024,
+  /** Maximum file size for direct upload (5GB) */
+  MAX_DIRECT_UPLOAD_SIZE: 5 * 1024 * 1024 * 1024,
 } as const;
 
 // Type helpers

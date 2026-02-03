@@ -43,7 +43,7 @@ export function FileUploader({
   onUploadComplete,
   onUploadStart,
   maxFiles = 10,
-  maxSizeMB = 2048, // 2GB max for video files
+  maxSizeMB = 5120, // 5GB max for video files
   acceptedTypes = DEFAULT_ACCEPTED,
   className,
 }: FileUploaderProps) {
