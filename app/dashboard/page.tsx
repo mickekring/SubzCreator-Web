@@ -439,7 +439,7 @@ export default function DashboardPage() {
             <FileUploader
               onUploadComplete={handleUploadComplete}
               maxFiles={10}
-              maxSizeMB={1024}
+              maxSizeMB={5120}
             />
           </div>
 

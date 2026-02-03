@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     // Validate file size
     if (file.size > FILE_SIZE_LIMITS.MAX_FILE_SIZE) {
-      return errorResponse('File too large. Maximum size is 2GB.', 400);
+      return errorResponse('File too large. Maximum size is 5GB.', 400);
     }
 
     const uuid = randomUUID();
