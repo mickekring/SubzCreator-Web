@@ -216,42 +216,18 @@ Style: Default,${fontName},${fontSize},${primaryColor},&H000000FF,${outlineColor
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
 
-  // Calculate line spacing for multi-line subtitles
-  // Line height = fontSize * 1.4 gives comfortable reading spacing
-  const lineHeight = Math.round(fontSize * 1.4);
-
   const events = segments
-    .flatMap((segment) => {
+    .map((segment) => {
       const start = formatASSTime(segment.StartTime);
       const end = formatASSTime(segment.EndTime);
       // Normalize text to replace Unicode characters that may not render in limited font sets
-      const text = normalizeTextForSubtitles(segment.Text.trim());
+      let text = normalizeTextForSubtitles(segment.Text.trim());
 
-      // Check if this is a multi-line subtitle
-      if (text.includes('\n')) {
-        const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      // Convert newlines to ASS hard line breaks (\N)
+      // This lets libass handle multi-line rendering naturally without separate dialogue events
+      text = text.replace(/\n/g, '\\N');
 
-        if (lines.length === 2) {
-          // Two-line subtitle: render as separate dialogue events with different vertical positions
-          // Line 1 (top) has higher MarginV, Line 2 (bottom) has default MarginV
-          const line2MarginV = marginV;
-          const line1MarginV = marginV + lineHeight;
-
-          return [
-            `Dialogue: 0,${start},${end},Default,,0,0,${line1MarginV},,${lines[0]}`,
-            `Dialogue: 0,${start},${end},Default,,0,0,${line2MarginV},,${lines[1]}`,
-          ];
-        }
-
-        // More than 2 lines: stack them from bottom up
-        return lines.map((line, index) => {
-          const lineMarginV = marginV + (lines.length - 1 - index) * lineHeight;
-          return `Dialogue: 0,${start},${end},Default,,0,0,${lineMarginV},,${line}`;
-        });
-      }
-
-      // Single line subtitle
-      return [`Dialogue: 0,${start},${end},Default,,0,0,0,,${text}`];
+      return `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}`;
     })
     .join('\n');
 
