@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/admin';
-import { getNocoDBClient, sanitizeEmail } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient, sanitizeEmail } from '@/lib/db/nocodb';
 import { hashPassword, validatePassword, getPasswordRequirementsText } from '@/lib/auth/password';
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/auth/rate-limit';
 import { logAuditEvent, getRequestMetadata } from '@/lib/auth/audit';
@@ -24,10 +24,11 @@ export async function GET() {
 
   try {
     const db = getNocoDBClient();
+    const { baseId, tableId: usersTableId } = await NocoDBClient.getIds('Users');
     const response = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'Users',
+      baseId,
+      usersTableId,
       {
         sort: '-CreatedAt',
         limit: 1000,
@@ -123,6 +124,7 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: usersTableId } = await NocoDBClient.getIds('Users');
 
     // Sanitize email to prevent NoSQL injection
     const safeEmail = sanitizeEmail(email);
@@ -130,8 +132,8 @@ export async function POST(request: NextRequest) {
     // Check if user already exists
     const existing = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'Users',
+      baseId,
+      usersTableId,
       { where: `(Email,eq,${safeEmail})`, limit: 1 }
     );
 
@@ -146,8 +148,8 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(password);
     const user = await db.dbTableRow.create(
       'noco',
-      'SubzCreator',
-      'Users',
+      baseId,
+      usersTableId,
       {
         Email: safeEmail,
         Name: name,

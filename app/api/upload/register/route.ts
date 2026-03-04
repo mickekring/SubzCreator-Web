@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { auth } from '@/auth';
 import { createS3Storage, S3Storage } from '@/lib/storage/s3';
-import { getNocoDBClient } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient } from '@/lib/db/nocodb';
 import {
   saveToTempFile,
   processMediaFile,
@@ -63,12 +63,13 @@ export async function POST(request: NextRequest) {
     // Initialize storage and database
     const s3 = createS3Storage();
     const db = getNocoDBClient();
+    const { baseId, tableId: filesTableId } = await NocoDBClient.getIds('Files');
 
     // Create file record with 'processing' status
     const fileRecord = await db.dbTableRow.create(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       {
         UserId: parseInt(userId),
         Filename: filename,
@@ -97,6 +98,8 @@ export async function POST(request: NextRequest) {
       extension,
       s3,
       db,
+      baseId,
+      filesTableId,
       tempFiles
     ).catch((error) => {
       console.error('Background processing error:', error);
@@ -140,11 +143,13 @@ async function processInBackground(
   extension: string,
   s3: S3Storage,
   db: any,
+  baseId: string,
+  filesTableId: string,
   tempFiles: string[]
 ) {
   try {
     // Update progress: Downloading original
-    await updateFileProgress(db, fileId, 15, 'processing');
+    await updateFileProgress(db, fileId, 15, 'processing', baseId, filesTableId);
 
     // Download original file from S3
     console.log(`Downloading file from ${sourceUrl}`);
@@ -162,7 +167,7 @@ async function processInBackground(
     console.log(`Media info: duration=${mediaInfo.duration}s`);
 
     // Update progress: Starting conversion
-    await updateFileProgress(db, fileId, 25, 'processing');
+    await updateFileProgress(db, fileId, 25, 'processing', baseId, filesTableId);
 
     // Process media (FFmpeg conversion)
     const result = await processMediaFile(tempOriginalPath);
@@ -172,7 +177,7 @@ async function processInBackground(
     tempFiles.push(result.audioPath);
 
     // Update progress: Uploading converted files
-    await updateFileProgress(db, fileId, 60, 'processing');
+    await updateFileProgress(db, fileId, 60, 'processing', baseId, filesTableId);
 
     // Upload converted files to S3
     let previewUrl: string | undefined;
@@ -187,7 +192,7 @@ async function processInBackground(
     });
     audioUrl = audioUpload.publicUrl;
 
-    await updateFileProgress(db, fileId, 75, 'processing');
+    await updateFileProgress(db, fileId, 75, 'processing', baseId, filesTableId);
 
     // Upload video preview (if video)
     if (isVideo && result.previewPath) {
@@ -210,15 +215,15 @@ async function processInBackground(
       console.log(`Thumbnail uploaded: ${thumbnailUrl}`);
     }
 
-    await updateFileProgress(db, fileId, 90, 'processing');
+    await updateFileProgress(db, fileId, 90, 'processing', baseId, filesTableId);
 
     // Update file record with URLs and 'ready' status
     const storageUrl = previewUrl || audioUrl;
 
     await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       fileId,
       {
         PreviewUrl: previewUrl || null,
@@ -239,8 +244,8 @@ async function processInBackground(
     try {
       await db.dbTableRow.update(
         'noco',
-        'SubzCreator',
-        'Files',
+        baseId,
+        filesTableId,
         fileId,
         {
           Status: 'error',
@@ -261,12 +266,12 @@ async function processInBackground(
 /**
  * Helper to update file progress
  */
-async function updateFileProgress(db: any, fileId: number, progress: number, status: string) {
+async function updateFileProgress(db: any, fileId: number, progress: number, status: string, baseId: string, filesTableId: string) {
   try {
     await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       fileId,
       {
         ProcessingProgress: progress,

@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient } from '@/lib/db/nocodb';
 import { createS3Storage } from '@/lib/storage/s3';
 import type { APIResponse, Transcription, File as FileRecord } from '@/lib/types';
 
@@ -47,12 +47,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
+    const { tableId: segmentsTableId } = await NocoDBClient.getIds('TranscriptionSegments');
 
     // Get transcription
     const transcription = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       id
     ) as Transcription | null;
 
@@ -78,8 +80,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     console.log(`Fetching segments for transcription ID: ${id}`);
     const segments = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'TranscriptionSegments',
+      baseId,
+      segmentsTableId,
       {
         where: `(TranscriptionId,eq,${id})`,
         sort: 'StartTime',
@@ -146,12 +148,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
 
     // Verify ownership before update
     const existing = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       id
     ) as Transcription | null;
 
@@ -192,8 +195,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Update transcription
     const transcription = await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       id,
       updateData
     );
@@ -248,12 +251,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
+    const { tableId: segmentsTableId } = await NocoDBClient.getIds('TranscriptionSegments');
+    const { tableId: translatedSegmentsTableId } = await NocoDBClient.getIds('TranslatedSegments');
+    const { tableId: filesTableId } = await NocoDBClient.getIds('Files');
 
     // Check if transcription exists
     const transcription = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       id
     ) as Transcription | null;
 
@@ -285,8 +292,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // So we need to manually delete segments first
     const segments = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'TranscriptionSegments',
+      baseId,
+      segmentsTableId,
       {
         where: `(TranscriptionId,eq,${id})`,
         limit: 10000,
@@ -306,8 +313,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
           batch.map((segmentId) =>
             db.dbTableRow.delete(
               'noco',
-              'SubzCreator',
-              'TranscriptionSegments',
+              baseId,
+              segmentsTableId,
               segmentId
             )
           )
@@ -317,12 +324,38 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       console.log(`All ${segments.list.length} segments deleted`);
     }
 
+    // Delete associated translated segments
+    const translatedSegments = await db.dbTableRow.list(
+      'noco',
+      baseId,
+      translatedSegmentsTableId,
+      {
+        where: `(TranscriptionId,eq,${id})`,
+        limit: 10000,
+      }
+    );
+
+    if (translatedSegments.list && translatedSegments.list.length > 0) {
+      const BATCH_SIZE = 50;
+      const translatedIds = translatedSegments.list.map((s: any) => s.Id);
+
+      for (let i = 0; i < translatedIds.length; i += BATCH_SIZE) {
+        const batch = translatedIds.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map((segmentId) =>
+            db.dbTableRow.delete('noco', baseId, translatedSegmentsTableId, segmentId)
+          )
+        );
+      }
+      console.log(`Deleted ${translatedSegments.list.length} translated segments`);
+    }
+
     // Delete transcription
     console.log(`Deleting transcription ${id}`);
     const deleteResult = await db.dbTableRow.delete(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       id
     );
     console.log(`Transcription delete result:`, deleteResult);
@@ -330,8 +363,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Verify transcription deletion succeeded
     const verifyDeleted = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       id
     ).catch(() => null);
 
@@ -355,8 +388,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         // Get file record to get S3 URLs
         const fileRecord = await db.dbTableRow.read(
           'noco',
-          'SubzCreator',
-          'Files',
+          baseId,
+          filesTableId,
           fileId
         ) as FileRecord | null;
 
@@ -398,8 +431,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         // Delete file record from database
         await db.dbTableRow.delete(
           'noco',
-          'SubzCreator',
-          'Files',
+          baseId,
+          filesTableId,
           fileId
         );
         console.log(`File record ${fileId} deleted successfully`);

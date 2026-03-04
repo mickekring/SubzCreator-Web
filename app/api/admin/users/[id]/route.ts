@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/admin';
-import { getNocoDBClient, sanitizeEmail } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient, sanitizeEmail } from '@/lib/db/nocodb';
 import { logAuditEvent, getRequestMetadata } from '@/lib/auth/audit';
 import type { APIResponse, User } from '@/lib/types';
 
@@ -28,11 +28,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const db = getNocoDBClient();
+    const { baseId, tableId: usersTableId } = await NocoDBClient.getIds('Users');
 
     const user = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Users',
+      baseId,
+      usersTableId,
       id
     ) as User | null;
 
@@ -75,12 +76,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     const body = await request.json();
     const db = getNocoDBClient();
+    const { baseId, tableId: usersTableId } = await NocoDBClient.getIds('Users');
 
     // Check if user exists
     const existingUser = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Users',
+      baseId,
+      usersTableId,
       id
     ) as User | null;
 
@@ -118,8 +120,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       if (safeEmail !== existingUser.Email.toLowerCase()) {
         const emailCheck = await db.dbTableRow.list(
           'noco',
-          'SubzCreator',
-          'Users',
+          baseId,
+          usersTableId,
           { where: `(Email,eq,${safeEmail})`, limit: 1 }
         );
         if (emailCheck.list?.length > 0) {
@@ -156,8 +158,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const user = await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'Users',
+      baseId,
+      usersTableId,
       id,
       updateData
     ) as User;
@@ -205,12 +207,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const db = getNocoDBClient();
+    const { baseId, tableId: usersTableId } = await NocoDBClient.getIds('Users');
 
     // Check if user exists
     const existingUser = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Users',
+      baseId,
+      usersTableId,
       id
     ) as User | null;
 
@@ -231,8 +234,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     await db.dbTableRow.delete(
       'noco',
-      'SubzCreator',
-      'Users',
+      baseId,
+      usersTableId,
       id
     );
 

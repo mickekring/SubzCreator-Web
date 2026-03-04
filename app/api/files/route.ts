@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getNocoDBClient } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient } from '@/lib/db/nocodb';
 import { authenticateRequest, errorResponse, successResponse } from '@/lib/auth/api-middleware';
 import type { APIResponse, File } from '@/lib/types';
 
@@ -34,14 +34,15 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(0, parseInt(offsetParam, 10) || 0);
 
     const db = getNocoDBClient();
+    const { baseId, tableId: filesTableId } = await NocoDBClient.getIds('Files');
 
     // Get files for this user - ensure userId is a number for the query
     const userIdNum = parseInt(userId, 10);
 
     const files = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       {
         where: `(UserId,eq,${userIdNum})`,
         limit,
@@ -103,12 +104,13 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: filesTableId } = await NocoDBClient.getIds('Files');
 
     // Create file record
     const file = await db.dbTableRow.create(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       {
         UserId: parseInt(userId),
         Filename: filename,

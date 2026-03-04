@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient, sanitizeNocoDBValue, sanitizeNumericId } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient, sanitizeNocoDBValue, sanitizeNumericId } from '@/lib/db/nocodb';
 import { createTranslationService } from '@/lib/translation';
 import { checkRateLimit, getClientIP } from '@/lib/auth/rate-limit';
 import type {
@@ -71,12 +71,15 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
+    const { tableId: translatedSegmentsTableId } = await NocoDBClient.getIds('TranslatedSegments');
+    const { tableId: segmentsTableId } = await NocoDBClient.getIds('TranscriptionSegments');
 
     // Verify transcription exists and user owns it
     const transcription = (await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       transcriptionId
     )) as Transcription | null;
 
@@ -109,8 +112,8 @@ export async function POST(request: NextRequest) {
     // Check if translation already exists for this language
     const existingTranslations = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'TranslatedSegments',
+      baseId,
+      translatedSegmentsTableId,
       {
         where: `(TranscriptionId,eq,${safeTranscriptionId})~and(TargetLanguage,eq,${safeTargetLanguage})`,
         limit: 1,
@@ -130,8 +133,8 @@ export async function POST(request: NextRequest) {
     // Get all segments for transcription
     const segmentsResult = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'TranscriptionSegments',
+      baseId,
+      segmentsTableId,
       {
         where: `(TranscriptionId,eq,${safeTranscriptionId})`,
         sort: 'StartTime',
@@ -186,7 +189,7 @@ export async function POST(request: NextRequest) {
     console.log(`Saving ${translatedRecords.length} translated segments to database`);
 
     for (const record of translatedRecords) {
-      await db.dbTableRow.create('noco', 'SubzCreator', 'TranslatedSegments', record);
+      await db.dbTableRow.create('noco', baseId, translatedSegmentsTableId, record);
     }
 
     console.log('Translation saved successfully');

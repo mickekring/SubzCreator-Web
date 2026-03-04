@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient, sanitizeNumericId, sanitizeNocoDBValue } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient, sanitizeNumericId, sanitizeNocoDBValue } from '@/lib/db/nocodb';
 import { createS3Storage, S3Storage } from '@/lib/storage/s3';
 import { generateASS } from '@/lib/export/subtitles';
 import { burnSubtitles, saveToTempFile, cleanupTempFile, readFileToBuffer } from '@/lib/media/ffmpeg';
@@ -83,12 +83,16 @@ export async function POST(request: NextRequest) {
 
     const db = getNocoDBClient();
     const s3 = createS3Storage();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
+    const { tableId: filesTableId } = await NocoDBClient.getIds('Files');
+    const { tableId: translatedSegmentsTableId } = await NocoDBClient.getIds('TranslatedSegments');
+    const { tableId: segmentsTableId } = await NocoDBClient.getIds('TranscriptionSegments');
 
     // Get transcription
     const transcription = (await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       transcriptionId
     )) as Transcription | null;
 
@@ -113,8 +117,8 @@ export async function POST(request: NextRequest) {
     // Get associated file for original video URL
     const file = (await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       transcription.FileId
     )) as any;
 
@@ -152,8 +156,8 @@ export async function POST(request: NextRequest) {
       // Fetch translated segments
       const translatedResult = await db.dbTableRow.list(
         'noco',
-        'SubzCreator',
-        'TranslatedSegments',
+        baseId,
+        translatedSegmentsTableId,
         {
           where: `(TranscriptionId,eq,${safeTranscriptionId})~and(TargetLanguage,eq,${safeLanguage})`,
           sort: 'SegmentIndex',
@@ -188,8 +192,8 @@ export async function POST(request: NextRequest) {
       // Fetch original segments
       const segments = await db.dbTableRow.list(
         'noco',
-        'SubzCreator',
-        'TranscriptionSegments',
+        baseId,
+        segmentsTableId,
         {
           where: `(TranscriptionId,eq,${safeTranscriptionId})`,
           sort: 'StartTime',

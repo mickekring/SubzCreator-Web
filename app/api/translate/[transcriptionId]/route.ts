@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient, sanitizeNocoDBValue, sanitizeNumericId } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient, sanitizeNocoDBValue, sanitizeNumericId } from '@/lib/db/nocodb';
 import type {
   APIResponse,
   Transcription,
@@ -50,12 +50,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
+    const { tableId: translatedSegmentsTableId } = await NocoDBClient.getIds('TranslatedSegments');
 
     // Verify transcription ownership
     const transcription = (await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       transcriptionId
     )) as Transcription | null;
 
@@ -86,8 +88,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Fetch translated segments
     const translationsResult = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'TranslatedSegments',
+      baseId,
+      translatedSegmentsTableId,
       {
         where,
         sort: 'SegmentIndex',
@@ -188,12 +190,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
+    const { tableId: translatedSegmentsTableId } = await NocoDBClient.getIds('TranslatedSegments');
 
     // Verify transcription ownership
     const transcription = (await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       transcriptionId
     )) as Transcription | null;
 
@@ -218,8 +222,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Find all translated segments for this language
     const translationsResult = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'TranslatedSegments',
+      baseId,
+      translatedSegmentsTableId,
       {
         where: `(TranscriptionId,eq,${safeTranscriptionId})~and(TargetLanguage,eq,${safeTargetLanguage})`,
         limit: 10000,
@@ -250,7 +254,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       const batch = segmentIds.slice(i, i + BATCH_SIZE);
       await Promise.all(
         batch.map((id) =>
-          db.dbTableRow.delete('noco', 'SubzCreator', 'TranslatedSegments', id)
+          db.dbTableRow.delete('noco', baseId, translatedSegmentsTableId, id)
         )
       );
     }

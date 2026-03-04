@@ -151,6 +151,16 @@ class NocoDBClient {
   }
 
   /**
+   * Get base and table IDs for direct dbTableRow calls.
+   * Use this when you need to bypass NocoTable and call the API directly.
+   */
+  static async getIds(tableName: string): Promise<{ baseId: string; tableId: string }> {
+    const baseId = await this.getBaseId()
+    const tableId = await this.getTableId(tableName)
+    return { baseId, tableId }
+  }
+
+  /**
    * Reset cached instances (useful for testing)
    */
   static reset() {
@@ -191,10 +201,11 @@ export class NocoTable<T = any> {
     sort?: string
   }): Promise<{ list: T[]; pageInfo: any }> {
     const client = NocoDBClient.getClient()
+    const baseId = await NocoDBClient.getBaseId()
     const tableId = await this.getTableId()
 
     try {
-      const response = await client.dbTableRow.list('noco', 'SubzCreator', tableId, {
+      const response = await client.dbTableRow.list('noco', baseId, tableId, {
         ...options,
       })
       return response as { list: T[]; pageInfo: any }
@@ -212,7 +223,8 @@ export class NocoTable<T = any> {
     const tableId = await this.getTableId()
 
     try {
-      const record = await client.dbTableRow.read('noco', 'SubzCreator', tableId, id)
+      const baseId = await NocoDBClient.getBaseId()
+      const record = await client.dbTableRow.read('noco', baseId, tableId, id)
       return record as T
     } catch (error) {
       console.error(`Error finding record ${id} in ${this.tableName}:`, error)
@@ -228,7 +240,8 @@ export class NocoTable<T = any> {
     const tableId = await this.getTableId()
 
     try {
-      const record = await client.dbTableRow.create('noco', 'SubzCreator', tableId, data)
+      const baseId = await NocoDBClient.getBaseId()
+      const record = await client.dbTableRow.create('noco', baseId, tableId, data)
       return record as T
     } catch (error) {
       console.error(`Error creating record in ${this.tableName}:`, error)
@@ -244,9 +257,10 @@ export class NocoTable<T = any> {
     const tableId = await this.getTableId()
 
     try {
+      const baseId = await NocoDBClient.getBaseId()
       const record = await client.dbTableRow.update(
         'noco',
-        'SubzCreator',
+        baseId,
         tableId,
         id,
         data
@@ -266,7 +280,8 @@ export class NocoTable<T = any> {
     const tableId = await this.getTableId()
 
     try {
-      await client.dbTableRow.delete('noco', 'SubzCreator', tableId, id)
+      const baseId = await NocoDBClient.getBaseId()
+      await client.dbTableRow.delete('noco', baseId, tableId, id)
       return true
     } catch (error) {
       console.error(`Error deleting record ${id} from ${this.tableName}:`, error)

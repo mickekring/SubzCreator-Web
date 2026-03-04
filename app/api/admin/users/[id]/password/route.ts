@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/admin';
-import { getNocoDBClient } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient } from '@/lib/db/nocodb';
 import { hashPassword, validatePassword, getPasswordRequirementsText } from '@/lib/auth/password';
 import type { APIResponse, User } from '@/lib/types';
 
@@ -44,12 +44,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: usersTableId } = await NocoDBClient.getIds('Users');
 
     // Check if user exists
     const existingUser = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Users',
+      baseId,
+      usersTableId,
       id
     ) as User | null;
 
@@ -64,8 +65,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const passwordHash = await hashPassword(password);
     await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'Users',
+      baseId,
+      usersTableId,
       id,
       { PasswordHash: passwordHash }
     );

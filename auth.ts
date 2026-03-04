@@ -6,7 +6,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { authConfig } from './auth.config';
-import { getNocoDBClient, sanitizeEmail } from '@/lib/db/nocodb';
+import { NocoTable, sanitizeEmail } from '@/lib/db/nocodb';
 import { verifyPassword } from '@/lib/auth/password';
 import { logAuditEvent } from '@/lib/auth/audit';
 import type { User } from '@/lib/types';
@@ -29,7 +29,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         }
 
         try {
-          const db = getNocoDBClient();
+          const usersTable = new NocoTable<User>('Users');
 
           // Sanitize email to prevent NoSQL injection
           let safeEmail: string;
@@ -45,15 +45,10 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           }
 
           // Find user by email
-          const response = await db.dbTableRow.list(
-            'noco',
-            'SubzCreator',
-            'Users',
-            {
-              where: `(Email,eq,${safeEmail})`,
-              limit: 1,
-            }
-          );
+          const response = await usersTable.list({
+            where: `(Email,eq,${safeEmail})`,
+            limit: 1,
+          });
 
           const user = response.list?.[0] as User | undefined;
 

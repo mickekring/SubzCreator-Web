@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { createS3Storage, S3Storage } from '@/lib/storage/s3';
-import { getNocoDBClient, NocoDBApi } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient, NocoDBApi } from '@/lib/db/nocodb';
 import {
   saveStreamToTempFile,
   processMediaFile,
@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
     // Initialize storage and database
     const s3 = createS3Storage();
     const db = getNocoDBClient();
+    const { baseId, tableId: filesTableId } = await NocoDBClient.getIds('Files');
 
     // Step 1: Stream file directly to temp file (memory-efficient for large files)
     const tempOriginalPath = await saveStreamToTempFile(file.stream(), extension);
@@ -79,8 +80,8 @@ export async function POST(request: NextRequest) {
     // Step 3: Create file record with 'processing' status
     const fileRecord = await db.dbTableRow.create(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       {
         UserId: userId,
         Filename: file.name,
@@ -107,6 +108,8 @@ export async function POST(request: NextRequest) {
       isVideo,
       s3,
       db,
+      baseId,
+      filesTableId,
       tempFiles
     ).catch((error) => {
       console.error('Background processing error:', error);
@@ -148,11 +151,13 @@ async function processInBackground(
   isVideo: boolean,
   s3: S3Storage,
   db: NocoDBApi,
+  baseId: string,
+  filesTableId: string,
   tempFiles: string[]
 ) {
   try {
     // Update progress: Starting conversion
-    await updateFileProgress(db, fileId, 20, 'processing');
+    await updateFileProgress(db, fileId, 20, 'processing', baseId, filesTableId);
 
     // Step 5: Process media (FFmpeg conversion)
     const result = await processMediaFile(tempOriginalPath);
@@ -162,7 +167,7 @@ async function processInBackground(
     tempFiles.push(result.audioPath);
 
     // Update progress: Uploading converted files
-    await updateFileProgress(db, fileId, 50, 'processing');
+    await updateFileProgress(db, fileId, 50, 'processing', baseId, filesTableId);
 
     // Step 6: Upload converted files to S3 (using streaming for memory efficiency)
     let previewUrl: string | undefined;
@@ -176,7 +181,7 @@ async function processInBackground(
     });
     audioUrl = audioUpload.publicUrl;
 
-    await updateFileProgress(db, fileId, 70, 'processing');
+    await updateFileProgress(db, fileId, 70, 'processing', baseId, filesTableId);
 
     // Upload video preview (if video, streaming)
     if (isVideo && result.previewPath) {
@@ -197,15 +202,15 @@ async function processInBackground(
       console.log(`Thumbnail uploaded: ${thumbnailUrl}`);
     }
 
-    await updateFileProgress(db, fileId, 90, 'processing');
+    await updateFileProgress(db, fileId, 90, 'processing', baseId, filesTableId);
 
     // Step 7: Update file record with URLs and 'ready' status
     const storageUrl = previewUrl || audioUrl; // Use preview for video, audio for audio-only
 
     await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       fileId,
       {
         PreviewUrl: previewUrl || null,
@@ -226,8 +231,8 @@ async function processInBackground(
     try {
       await db.dbTableRow.update(
         'noco',
-        'SubzCreator',
-        'Files',
+        baseId,
+        filesTableId,
         fileId,
         {
           Status: 'error',
@@ -248,12 +253,12 @@ async function processInBackground(
 /**
  * Helper to update file progress
  */
-async function updateFileProgress(db: NocoDBApi, fileId: number, progress: number, status: string) {
+async function updateFileProgress(db: NocoDBApi, fileId: number, progress: number, status: string, baseId: string, filesTableId: string) {
   try {
     await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       fileId,
       {
         ProcessingProgress: progress,

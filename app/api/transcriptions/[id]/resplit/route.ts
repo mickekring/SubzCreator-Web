@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient } from '@/lib/db/nocodb';
 import { splitLongSegments, balanceSegmentText, type RawSegment } from '@/lib/utils/segments';
 import type { APIResponse, Transcription } from '@/lib/types';
 
@@ -50,12 +50,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
+    const { tableId: segmentsTableId } = await NocoDBClient.getIds('TranscriptionSegments');
 
     // Check if transcription exists
     const transcription = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       id
     ) as Transcription | null;
 
@@ -80,8 +82,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Get existing segments
     const existingSegments = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'TranscriptionSegments',
+      baseId,
+      segmentsTableId,
       {
         where: `(TranscriptionId,eq,${id})`,
         sort: 'StartTime',
@@ -129,8 +131,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         batch.map((segmentId) =>
           db.dbTableRow.delete(
             'noco',
-            'SubzCreator',
-            'TranscriptionSegments',
+            baseId,
+            segmentsTableId,
             segmentId
           )
         )
@@ -147,8 +149,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
           return db.dbTableRow.create(
             'noco',
-            'SubzCreator',
-            'TranscriptionSegments',
+            baseId,
+            segmentsTableId,
             {
               TranscriptionId: parseInt(id),
               StartTime: segment.startTime,

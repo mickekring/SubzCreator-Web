@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient } from '@/lib/db/nocodb';
 import type { APIResponse, Transcription, TranscriptionSegment } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -45,12 +45,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: segmentsTableId } = await NocoDBClient.getIds('TranscriptionSegments');
+    const { tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
 
     // Get segment to verify ownership through transcription
     const existingSegment = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'TranscriptionSegments',
+      baseId,
+      segmentsTableId,
       id
     ) as TranscriptionSegment | null;
 
@@ -64,8 +66,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Get parent transcription to verify ownership
     const transcription = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       existingSegment.TranscriptionId
     ) as Transcription | null;
 
@@ -99,8 +101,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Update segment
     const segment = await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'TranscriptionSegments',
+      baseId,
+      segmentsTableId,
       id,
       updateData
     );

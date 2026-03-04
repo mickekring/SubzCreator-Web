@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient } from '@/lib/db/nocodb';
 import type { APIResponse, File } from '@/lib/types';
 
 interface RouteParams {
@@ -25,11 +25,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
     const db = getNocoDBClient();
+    const { baseId, tableId: filesTableId } = await NocoDBClient.getIds('Files');
 
     const file = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       id
     ) as File | null;
 

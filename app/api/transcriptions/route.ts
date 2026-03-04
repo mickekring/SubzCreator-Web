@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient, sanitizeNumericId } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient, sanitizeNumericId } from '@/lib/db/nocodb';
 import { createASRService } from '@/lib/asr';
 import { splitLongSegments, balanceSegmentText, type RawSegment } from '@/lib/utils/segments';
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/auth/rate-limit';
@@ -41,14 +41,15 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(0, parseInt(offsetParam, 10) || 0);
 
     const db = getNocoDBClient();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
 
     // Get transcriptions for this user - ensure userId is a number
     const userIdNum = sanitizeNumericId(userId);
 
     const transcriptions = await db.dbTableRow.list(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       {
         where: `(UserId,eq,${userIdNum})`,
         limit,
@@ -138,12 +139,14 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
+    const { tableId: filesTableId } = await NocoDBClient.getIds('Files');
 
     // SECURITY: Verify file ownership before creating transcription
     const file = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       fileId
     ) as File | null;
 
@@ -164,8 +167,8 @@ export async function POST(request: NextRequest) {
     // Create transcription record with pending status
     const transcription = await db.dbTableRow.create(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       {
         UserId: parseInt(userId),
         FileId: fileId,
@@ -219,13 +222,15 @@ async function processTranscription(
   language?: string
 ) {
   const db = getNocoDBClient();
+  const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
+  const { tableId: segmentsTableId } = await NocoDBClient.getIds('TranscriptionSegments');
 
   try {
     // Update status to processing
     await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       transcriptionId,
       {
         Status: 'processing',
@@ -253,8 +258,8 @@ async function processTranscription(
     // Update transcription with results
     await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       transcriptionId,
       {
         Status: 'completed',
@@ -293,8 +298,8 @@ async function processTranscription(
 
         await db.dbTableRow.create(
           'noco',
-          'SubzCreator',
-          'TranscriptionSegments',
+          baseId,
+          segmentsTableId,
           {
             TranscriptionId: transcriptionId,
             StartTime: segment.startTime,
@@ -314,8 +319,8 @@ async function processTranscription(
     // Update status to failed
     await db.dbTableRow.update(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       transcriptionId,
       {
         Status: 'failed',

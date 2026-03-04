@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient, sanitizeNocoDBValue, sanitizeNumericId } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient, sanitizeNocoDBValue, sanitizeNumericId } from '@/lib/db/nocodb';
 import { checkRateLimit, getClientIP } from '@/lib/auth/rate-limit';
 import {
   generateSubtitles,
@@ -76,12 +76,15 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: transcriptionsTableId } = await NocoDBClient.getIds('Transcriptions');
+    const { tableId: translatedSegmentsTableId } = await NocoDBClient.getIds('TranslatedSegments');
+    const { tableId: segmentsTableId } = await NocoDBClient.getIds('TranscriptionSegments');
 
     // Get transcription
     const transcription = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Transcriptions',
+      baseId,
+      transcriptionsTableId,
       transcriptionId
     ) as Transcription | null;
 
@@ -114,8 +117,8 @@ export async function POST(request: NextRequest) {
       // Fetch translated segments
       const translatedResult = await db.dbTableRow.list(
         'noco',
-        'SubzCreator',
-        'TranslatedSegments',
+        baseId,
+        translatedSegmentsTableId,
         {
           where: `(TranscriptionId,eq,${safeTranscriptionId})~and(TargetLanguage,eq,${safeLanguage})`,
           sort: 'SegmentIndex',
@@ -148,8 +151,8 @@ export async function POST(request: NextRequest) {
       // Fetch original segments
       const segments = await db.dbTableRow.list(
         'noco',
-        'SubzCreator',
-        'TranscriptionSegments',
+        baseId,
+        segmentsTableId,
         {
           where: `(TranscriptionId,eq,${safeTranscriptionId})`,
           sort: 'StartTime',

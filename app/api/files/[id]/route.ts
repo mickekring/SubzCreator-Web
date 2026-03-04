@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getNocoDBClient } from '@/lib/db/nocodb';
+import NocoDBClient, { getNocoDBClient } from '@/lib/db/nocodb';
 import { createS3Storage } from '@/lib/storage/s3';
 import type { APIResponse, File } from '@/lib/types';
 
@@ -46,12 +46,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: filesTableId } = await NocoDBClient.getIds('Files');
 
     // Get file
     const file = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       id
     ) as File | null;
 
@@ -122,12 +123,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const db = getNocoDBClient();
+    const { baseId, tableId: filesTableId } = await NocoDBClient.getIds('Files');
 
     // Get file to extract storage URL
     const file = await db.dbTableRow.read(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       id
     ) as File | null;
 
@@ -166,8 +168,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Delete from database
     await db.dbTableRow.delete(
       'noco',
-      'SubzCreator',
-      'Files',
+      baseId,
+      filesTableId,
       id
     );
 
